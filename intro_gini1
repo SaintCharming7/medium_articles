@@ -1,0 +1,96 @@
+## INTRO TO GINI: ARTICLE 1 ##
+package_list<- c("ggplot2", "dplyr","ineq","WDI", "countrycode", "ggpmisc", "ggrepel")
+lapply(package_list, require, character.only = TRUE)
+
+# Lorenz Curve
+
+set.seed(123)  # For reproducibility
+income <- c(rlnorm(80, meanlog = 2, sdlog = 0.5),  # Lower-middle incomes
+            rlnorm(15, meanlog = 4, sdlog = 0.8),  # High incomes
+            rlnorm(5, meanlog = 6, sdlog = 1.0))   # Ultra-high incomes
+
+# Prepare Lorenz curve data
+lorenz <- Lc(income)
+lorenz_df <- data.frame(
+  population = lorenz$p,
+  cumulative_income = lorenz$L
+)
+
+# Plot Lorenz Curve with ggplot2
+ggplot(lorenz_df, aes(x = population, y = cumulative_income)) +
+  geom_line(color = "blue", size = 1.2) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray40") +
+  labs(
+    title = "Lorenz Curve for Simulated Income Distribution",
+    x = "Cumulative Share of Population",
+    y = "Cumulative Share of Income"
+  ) +
+  theme_classic()
+
+
+
+# Plot Lorenz curve
+plot(Lc(income), col = "darkblue", lwd = 2, 
+     main = "Lorenz Curve of Income Distribution",
+     xlab = "Cumulative Population Share", 
+     ylab = "Cumulative Income Share")
+abline(0, 1, col = "maroon4", lty = 2)  # Add line of equality
+
+# We are going to download Gini data from the WDI package going back 10 years ago.
+# Feel free to edit the data according to your analysis
+gini_data <- WDI(country = "all", indicator = "SI.POV.GINI", start = 2015)
+
+summary(gini_data)
+str(gini_data)
+head(gini_data)
+
+# Filter for the most recent year with non-NA values per country
+gini_recent <- gini_data %>%
+  group_by(country) %>%
+  filter(!is.na(SI.POV.GINI)) %>%   # Drop NA Gini values
+  filter(year == max(year)) %>%     # Keep most recent year
+  ungroup()
+head(gini_recent)
+
+
+# Fetch income group metadata
+income_groups <- WDI(country = "all", indicator = "NY.GNP.PCAP.CD", start = 2020) %>% 
+  group_by(country) %>% 
+  filter(year == max(year)) %>% 
+  select(country, gni_per_capita = NY.GNP.PCAP.CD)
+
+# Merge with Gini data and classify
+gini_with_income <- gini_recent %>%
+  left_join(income_groups, by = "country") %>%
+  mutate(
+    income_group = case_when(
+      gni_per_capita < 1045 ~ "Low",
+      gni_per_capita < 4095 ~ "Lower-middle",
+      gni_per_capita < 12695 ~ "Upper-middle",
+      TRUE ~ "High"
+    )
+  ) %>%
+  filter(!is.na(income_group))
+head(gini_with_income)
+
+ggplot(gini_with_income, aes(x = income_group, y = SI.POV.GINI)) +
+  geom_boxplot(color = "black", fill = "pink") +
+  labs(title = "Gini Coefficients by Income Group", 
+       x = "Income Group", y = "Gini Index")+theme_classic()
+
+ggplot(gini_with_income, aes(x = income_group, y = SI.POV.GINI, fill = income_group)) +
+  geom_violin(alpha = 0.6) +
+  geom_boxplot(width = 0.2) +
+  labs(title = "Income Inequality Across Income Groups",
+       x = "Income Group", y = "Gini Coefficient") +
+  theme_classic()
+
+# Add regions (example: using countrycode package)
+
+gini_with_income$region <- countrycode(gini_with_income$iso3c, "iso3c", "region")
+
+# Plot
+ggplot(na.omit(gini_with_income), aes(x = region, y = SI.POV.GINI)) +
+  geom_boxplot(color = 'black', fill = 'pink') +
+  coord_flip() +  # Horizontal for readability
+  labs(title = "Gini Coefficients by World Region")+theme_classic()
