@@ -1,0 +1,137 @@
+#Ideas for Your Macroeconomics Report Using R- pt.I
+package_list<- c("ggplot2", "dplyr","globalmacrodata", "devtools", "tidyr")
+lapply(package_list, require, character.only = TRUE)
+
+# Define countries and variables
+countries <- c("USA", "CHN", "DEU", "IND", "JPN", "BRA", "RUS", "SAU", "MEX", "ZAF")
+# Define corrected variables
+variables <- c("rGDP", "CPI", "unemp", "strate","ltrate", "USDfx", "govdebt_GDP", "M2")
+
+# Fetch data and combine
+data <- gmd(country = countries, variables = variables)
+#gmd(vars = TRUE)
+# Filter for years 2014–2024
+filtered_data <- data %>%
+  filter(year >= 2014 & year <= 2024)
+
+# Here we will create a rGDP growth column
+# For that, we will calculate the percent difference of each observation
+# This can be seen in the function mutate(rGDP_growth = (rGDP / lag(rGDP) - 1) * 100)
+filtered_data_growth <- filtered_data %>%
+  group_by(countryname) %>%
+  arrange(year, .by_group = TRUE) %>%
+  mutate(rGDP_growth = (rGDP / lag(rGDP) - 1) * 100) %>%
+  ungroup()
+
+# Now let's create the average rGDP growth in our column
+# We will use the summarise function to do so...
+avg_growth_by_country <- filtered_data_growth %>%
+  group_by(countryname) %>%
+  summarise(avg_rGDP_growth = mean(rGDP_growth, na.rm = TRUE)) %>%
+  arrange(desc(avg_rGDP_growth))
+
+#Great! Now let's choose our top 5 growing economies
+top5_countries <- head(avg_growth_by_country, 5)
+print(top5_countries)
+
+# creating a TS
+top5_names <- top5_countries$countryname
+
+top5_growth_data <- filtered_data_growth %>%
+  filter(countryname %in% top5_names)
+
+#  ts graph for rGDP growth
+ggplot(top5_growth_data, aes(x = year, y = rGDP_growth, color = countryname)) +
+  geom_line(size = 0.8) +
+  labs(
+    title = "Real GDP Growth Over Time: Top 5 Countries",
+    x = "Year",
+    y = "Real GDP Growth (%)",
+    color = "Country"
+  ) +
+  theme_classic() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    axis.title = element_text(size = 12),
+    legend.title = element_text(size = 11),
+    legend.position = "bottom"
+  )
+
+# top worst performing currencies relative to the dollar
+avg_usdfx <- filtered_data %>%
+  group_by(countryname) %>%
+  summarise(avg_usdfx = mean(USDfx, na.rm = TRUE)) %>%
+  arrange(desc(avg_usdfx))  # Worst (weakest) currencies at the top
+
+top5_usdfx_countries <- head(avg_usdfx, 5)
+top5_names_fx <- top5_usdfx_countries$countryname
+
+top5_currency_data <- filtered_data %>%
+  filter(countryname %in% top5_names_fx)
+
+
+# ts graph for fx rates
+ggplot(top5_currency_data, aes(x = year, y = USDfx, color = countryname)) +
+  geom_line(size = 0.8) +
+  labs(
+    title = "Worst Performing Currencies Against the USD (Avg. over 10 Years)",
+    x = "Year",
+    y = "Exchange Rate (Local Currency per USD)",
+    color = "Country"
+  ) +
+  theme_classic() +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(size = 11),
+    axis.title = element_text(size = 12),
+    legend.title = element_text(size = 11),
+    legend.position = "bottom"
+  )
+
+# random name generator: choosing countries
+
+# Step 1: Extract unique country names
+unique_countries <- unique(filtered_data$countryname)
+
+# Step 2: Randomly select one country
+set.seed(123)  # Optional: for reproducibility
+random_country <- sample(unique_countries, 1)
+
+# Step 3: Print the result
+cat("Selected country for analysis:", random_country, "\n")
+
+# Step 1: Calculate inflation rate
+filtered_data_inflation <- filtered_data %>%
+  group_by(countryname) %>%
+  arrange(year) %>%
+  mutate(inflation = (CPI - lag(CPI)) / lag(CPI) * 100)
+
+germany_data <- filtered_data_inflation %>%
+  filter(countryname == "Germany")
+
+# Step 3: Reshape data for plotting
+germany_long <- germany_data %>%
+  select(year, unemp, inflation) %>%
+  pivot_longer(cols = c(unemp, inflation), names_to = "indicator", values_to = "value")
+
+# Step 4: Plot
+ggplot(germany_long, aes(x = year, y = value, color = indicator)) +
+  geom_line(size = 1) +
+  labs(title = "Germany: Unemployment vs Inflation Rate",
+       x = "Year",
+       y = "Percent",
+       color = "Indicator") +
+  theme_classic()
+
+# Create the time-series plot for interest rates
+ggplot(germany_data, aes(x = year)) +
+  geom_line(aes(y = strate, color = "Short-term Rate"), linewidth = 1) +
+  geom_line(aes(y = ltrate, color = "Long-term Rate"), linewidth = 1) +
+  labs(title = "Germany: Short-term vs Long-term Interest Rates",
+       x = "Year",
+       y = "Interest Rate (%)",
+       color = "Rate Type") +
+  scale_color_manual(values = c("Short-term Rate" = "blue", 
+                                "Long-term Rate" = "maroon3")) +
+  theme_classic() +
+  theme(legend.position = "bottom")
