@@ -1,0 +1,131 @@
+#Solving the Missing Data Puzzle: Intro to Econometric Techniques in R
+
+# Let's call our libraries!
+package_list<- c("ggplot2", "dplyr","ineq","WDI", "countrycode", "ggpmisc", "ggrepel", "mice")
+lapply(package_list, require, character.only = TRUE)
+# We are going to download Gini data from the WDI package going back 10 years ago.
+# Feel free to edit the data according to your analysis
+gini_data <- WDI(country = "all", indicator = "SI.POV.GINI", start = 2015)
+
+str(gini_data)
+head(gini_data)
+glimpse(gini_data)
+
+# counting the NAs
+
+# Count total missing values in the whole dataframe
+sum(is.na(gini_data))
+
+# Count missing values per variable
+colSums(is.na(gini_data))
+
+# Verifying the percentage of missing values
+sapply(gini_data, function(x) mean(is.na(x)) * 100)
+
+# Missing values by country
+missing_by_country <- gini_data %>%
+  group_by(country) %>%
+  summarise(missing_gini = sum(is.na(SI.POV.GINI)),
+            total_obs = n()) %>%
+  arrange(desc(missing_gini))
+
+# Plot missing by country (top 10 for readability)
+ggplot(head(missing_by_country, 10), aes(x = reorder(country, missing_gini), y = missing_gini)) +
+  geom_col(fill = "violet") +
+  coord_flip() +
+  labs(title = "Missing Gini Values by Country (Top 10)",
+       x = "",
+       y = "Number of Missing Gini Values")+theme_classic()
+
+# Missing values by year
+missing_by_year <- gini_data %>%
+  group_by(year) %>%
+  summarise(missing_gini = sum(is.na(SI.POV.GINI)),
+            total_obs = n())
+
+ggplot(missing_by_year, aes(x = year, y = missing_gini)) +
+  geom_col(fill = "steelblue") +
+  labs(title = "Missing Gini Values by Year",
+       x = "Year",
+       y = "Number of Missing Gini Values") +
+  scale_x_continuous(breaks = seq(min(missing_by_year$year), max(missing_by_year$year), by = 1)) +
+  theme_classic()
+
+# mean imputation
+
+gini_data$SI.POV.GINI[is.na(gini_data$SI.POV.GINI)] <- 
+  mean(gini_data$SI.POV.GINI, na.rm = TRUE)
+
+colSums(is.na(gini_data))
+
+# median imputation
+gini_data$SI.POV.GINI[is.na(gini_data$SI.POV.GINI)] <- 
+  median(gini_data$SI.POV.GINI, na.rm = TRUE)
+
+# mode imputation
+
+gini_data$SI.POV.GINI[is.na(gini_data$SI.POV.GINI)] <-
+  mode(gini_data$SI.POV.GINI, na.rm = TRUE)
+
+# imputation by country 
+
+#mean by country
+gini_data_mean <- gini_data %>%
+  group_by(country) %>%
+  mutate(SI.POV.GINI = ifelse(is.na(SI.POV.GINI),
+                              mean(SI.POV.GINI, na.rm = TRUE),
+                              SI.POV.GINI)) %>%
+  ungroup()
+
+# median by country
+gini_data_median <- gini_data %>%
+  group_by(country) %>%
+  mutate(SI.POV.GINI = ifelse(is.na(SI.POV.GINI),
+                              median(SI.POV.GINI, na.rm = TRUE),
+                              SI.POV.GINI)) %>%
+  ungroup()
+
+# mode by country
+get_mode <- function(x) {
+  uniq <- na.omit(unique(x))
+  uniq[which.max(tabulate(match(x, uniq)))]
+}
+
+gini_data_mode <- gini_data %>%
+  group_by(country) %>%
+  mutate(SI.POV.GINI = ifelse(is.na(SI.POV.GINI),
+                              get_mode(SI.POV.GINI),
+                              SI.POV.GINI)) %>%
+  ungroup()
+
+is.na(gini_data_mean)
+
+
+# Verify no missing values remain
+colSums(is.na(gini_data_mean))   # or gini_data_median / gini_data_mode
+
+# If the imputation worked, the column SI.POV.GINI should show 0 missing values 
+#(except for countries where all values were NA).
+
+#Check countries with all missing values
+gini_data %>%
+  group_by(country) %>%
+  summarise(missing_after = sum(is.na(SI.POV.GINI)))
+
+#If some countries had all values missing, they’ll still have NA after imputation
+
+gini_data_mean %>% filter(country == "Azerbaijan") %>% arrange(year)
+
+# regression imputation
+
+
+# Build regression model on non-missing Gini values, using year only
+fit <- lm(SI.POV.GINI ~ year, data = gini_data, subset = !is.na(SI.POV.GINI))
+
+# Predict missing values
+gini_data$SI.POV.GINI[is.na(gini_data$SI.POV.GINI)] <- 
+  predict(fit, newdata = gini_data[is.na(gini_data$SI.POV.GINI), ])
+
+# Check results
+summary(gini_data$SI.POV.GINI)
+colSums(is.na(gini_data))  # should now show 0 for SI.POV.GINI
