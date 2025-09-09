@@ -1,0 +1,31 @@
+#install.packages(c("ggplot2", "remotes","wid","dplyr","tidyr", "tidyverse", "readr", "ggthemes"))
+# Load the required libraries for this exercise
+#library("input name of the package")
+# Or you can choose the method below for a cleaner look in the script
+package_list<- c("ggplot2", "wid","dplyr","tidyr", "tidyverse", "readr", "ggthemes")
+lapply(package_list, require, character.only = TRUE)
+
+
+# install wid from GitHub
+remotes::install_github("wid-world/wid-r-tool")
+
+# Define a list of interesting countries to compare
+key_countries <- c("Brazil", "United States", "India", "Germany", "South Africa", "China", "Sweden")
+
+# Filter and plot
+palma_ratio %>%
+  filter(Country %in% key_countries) %>%
+  ggplot(aes(x = Year, y = `Palma ratio (before tax) (World Inequality Database)`, 
+             color = Country, group = Country)) +
+  geom_line(size = 1.2, alpha = 0.8) +
+  geom_point(size = 1.5) +
+  labs(
+    title = "Evolution of Income Inequality (Palma Ratio)",
+    subtitle = "Ratio of richest 10% share to poorest 40% share - Before Tax",
+    y = "Palma Ratio",
+    x = "Year",
+    caption = "Source: World Inequality Database via Our World in Data"
+  ) +
+  theme_economist() + # Or try theme_minimal(), theme_fivethirtyeight()
+  scale_color_brewer(palette = "Set1") +
+  theme(legend.position = "bottom")
