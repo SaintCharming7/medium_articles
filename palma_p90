@@ -47,20 +47,37 @@ top_countries <- palma_filtered %>%
 top_countries_data <- palma_filtered %>%
   filter(Country %in% top_countries)
 
-# Create line plot
-ggplot(top_countries_data, 
-       aes(x = Year, 
-           y = `Palma ratio (before tax) (World Inequality Database)`, 
-           color = Country,
-           group = Country)) +
-  geom_line(linewidth = 1.2) +
-  geom_point(size = 2) +
-  labs(title = "Top 5 Countries with Highest Palma Ratio (2001 onwards)",
-       x = "Year",
-       y = "Palma Ratio (before tax)",
-       color = "Country") +
-  theme_classic() +
-  theme(legend.position = "bottom",
-        plot.title = element_text(hjust = 0.5, face = "bold")) +
-  scale_x_continuous(breaks = seq(2001, max(top_countries_data$Year), by = 2))
+# Calculate median by country (to preserve country-specific patterns)
+country_medians <- top_countries_data %>%
+  group_by(Country) %>%
+  summarise(country_median = median(`Palma ratio (before tax) (World Inequality Database)`, 
+                                    na.rm = TRUE),
+            .groups = 'drop')
 
+# Perform median imputation
+top_countries_imputed <- top_countries_data %>%
+  left_join(country_medians, by = "Country") %>%
+  mutate(`Palma ratio (before tax) (World Inequality Database)` = 
+           ifelse(is.na(`Palma ratio (before tax) (World Inequality Database)`),
+                  country_median,
+                  `Palma ratio (before tax) (World Inequality Database)`)) %>%
+  select(-country_median)
+
+# Verify the imputation
+cat("Before imputation - NA count:", sum(is.na(top_countries_data$`Palma ratio (before tax) (World Inequality Database)`)), "\n")
+cat("After imputation - NA count:", sum(is.na(top_countries_imputed$`Palma ratio (before tax) (World Inequality Database)`)), "\n")
+
+# Summary of imputed data
+summary(top_countries_imputed)
+
+# Plot to see where imputations occurred
+ggplot(top_countries_imputed, aes(x = Year, y = `Palma ratio (before tax) (World Inequality Database)`, 
+                                  color = Country)) +
+  geom_line(data = top_countries_data, aes(group = Country), color = "gray80", alpha = 0.5) +
+  geom_line(linewidth = 1.2) +
+  geom_point(data = subset(top_countries_imputed, 
+                           is.na(top_countries_data$`Palma ratio (before tax) (World Inequality Database)`)),
+             size = 3, shape = 1, color = "red") +
+  labs(title = "Top 5 Countries Palma Ratio with Imputed Values (red circles)",
+       x = "Year", y = "Palma Ratio") +
+  theme_classic()
