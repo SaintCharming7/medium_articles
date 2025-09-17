@@ -35,6 +35,28 @@ palma_ratio %>%
 palma_filtered <- palma_ratio %>%
   filter(Year >= 2001)
 
+summary(palma_filtered)
+
+palma_filtered_medians <- palma_filtered %>%
+  group_by(Country) %>%
+  summarise(country_median = median(`Palma ratio (before tax) (World Inequality Database)`, 
+                                    na.rm = TRUE),
+            .groups = 'drop')
+
+# Perform median imputation
+countries_imputed <- palma_filtered %>%
+  left_join(palma_filtered_medians, by = "Country") %>%
+  mutate(`Palma ratio (before tax) (World Inequality Database)` = 
+           ifelse(is.na(`Palma ratio (before tax) (World Inequality Database)`),
+                  country_median,
+                  `Palma ratio (before tax) (World Inequality Database)`)) %>%
+  select(-country_median)
+
+# Verify the imputation
+cat("Before imputation - NA count:", sum(is.na(palma_filtered$`Palma ratio (before tax) (World Inequality Database)`)), "\n")
+cat("After imputation - NA count:", sum(is.na(countries_imputed$`Palma ratio (before tax) (World Inequality Database)`)), "\n")
+
+
 # Find top 5 countries with highest average inequality
 top_countries <- palma_filtered %>%
   group_by(Country) %>%
@@ -81,3 +103,4 @@ ggplot(top_countries_imputed, aes(x = Year, y = `Palma ratio (before tax) (World
   labs(title = "Top 5 Countries Palma Ratio with Imputed Values (red circles)",
        x = "Year", y = "Palma Ratio") +
   theme_classic()
+
