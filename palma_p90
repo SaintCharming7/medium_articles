@@ -25,6 +25,7 @@ palma_filtered_medians <- palma_filtered %>%
             .groups = 'drop')
 
 str(palma_filtered_medians)
+head(palma_filtered_medians)
 
 # Perform median imputation
 countries_imputed <- palma_filtered %>%
@@ -54,11 +55,11 @@ summary(palma_filtered$`Palma ratio (before tax) (World Inequality Database)`)
 cat("\n--- AFTER ---\n")
 summary(countries_imputed$`Palma ratio (before tax) (World Inequality Database)`)
 
-# Find top 5 countries with highest average inequality
+# Find top 5 countries with highest median inequality
 top_countries <- palma_filtered %>%
   group_by(Country) %>%
-  summarise(avg_inequality = mean(`Palma ratio (before tax) (World Inequality Database)`, na.rm = TRUE)) %>%
-  arrange(desc(avg_inequality)) %>%
+  summarise(median_inequality = median(`Palma ratio (before tax) (World Inequality Database)`, na.rm = TRUE)) %>%
+  arrange(desc(median_inequality)) %>%
   head(5) %>%
   pull(Country)
 
@@ -72,6 +73,7 @@ country_medians <- top_countries_data %>%
   summarise(country_median = median(`Palma ratio (before tax) (World Inequality Database)`, 
                                     na.rm = TRUE),
             .groups = 'drop')
+head(country_medians)
 
 # Perform median imputation
 top_countries_imputed <- top_countries_data %>%
@@ -88,6 +90,7 @@ cat("After imputation - NA count:", sum(is.na(top_countries_imputed$`Palma ratio
 
 # Summary of imputed data
 summary(top_countries_imputed)
+head(top_countries_imputed)
 
 # Plot to see where imputations occurred
 ggplot(top_countries_imputed, aes(x = Year, y = `Palma ratio (before tax) (World Inequality Database)`, 
@@ -100,4 +103,3 @@ ggplot(top_countries_imputed, aes(x = Year, y = `Palma ratio (before tax) (World
   labs(title = "Top 5 Countries Palma Ratio with Imputed Values (red circles)",
        x = "Year", y = "Palma Ratio") +
   theme_classic()
-
